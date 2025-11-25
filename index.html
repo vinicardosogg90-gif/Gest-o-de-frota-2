@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Frota - Dashboard Completo</title>
+    <meta name="description" content="Dashboard de gerenciamento de veículos, custos e manutenções.">
+    
+    <!-- Bibliotecas Externas (CDNs) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        :root {
+            --color-primary: #f97316; /* Laranja 500 */
+            --color-primary-dark: #ea580c; /* Laranja 600 */
+            --color-background: #1f2937; /* Cinza Escuro 800 */
+            --color-card-bg: #374151; /* Cinza 700 */
+            --color-text: #f9fafb; /* Cinza Claro 50 */
+            --color-secondary-text: #9ca3af; /* Cinza 400 */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--color-background);
+            color: var(--color-text);
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar Personalizada */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background-color: var(--color-primary-dark); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: var(--color-card-bg); }
+
+        /* Componentes */
+        .kpi-card {
+            background-color: var(--color-card-bg);
+            border-left: 5px solid var(--color-primary);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover { background-color: var(--color-primary-dark); }
+
+        .btn-secondary {
+            background-color: #4b5563;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .btn-secondary:hover { background-color: #374151; }
+
+        .btn-action {
+            background-color: #374151;
+            color: #e5e7eb;
+            border: 1px solid #4b5563;
+            transition: all 0.2s;
+        }
+        .btn-action:hover {
+            background-color: #4b5563;
+            color: white;
+            border-color: #9ca3af;
+        }
+
+        .btn-save-manual {
+            background-color: #059669;
+            color: white;
+            border: 1px solid #047857;
+            transition: all 0.2s;
+        }
+        .btn-save-manual:hover { background-color: #047857; }
+
+        .input-dark {
+            background-color: #111827;
+            border: 1px solid #4b5563;
+            color: var(--color-text);
+        }
+        .input-dark:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            ring: 2px var(--color-primary);
+        }
+
+        .checkbox-wrapper { display: flex; align-items: center; cursor: pointer; }
+        .checkbox-wrapper input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 1.25em;
+            height: 1.25em;
+            border: 1px solid #4b5563;
+            border-radius: 0.25em;
+            background-color: #111827;
+            margin-right: 0.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .checkbox-wrapper input[type="checkbox"]:checked {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+        .checkbox-wrapper input[type="checkbox"]:checked::after {
+            content: '✔';
+            font-size: 0.9em;
+            color: white;
+        }
+
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background-color: #4b5563; }
+
+        .chart-container { position: relative; height: 100%; width: 100%; }
+
+        /* Animações */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-animate { animation: fadeIn 0.2s ease-out forwards; }
+
+        .dense-cell { padding: 0.5rem 0.75rem; font-size: 0.75rem; white-space: nowrap; }
+
+        /* --- ESTILOS DE IMPRESSÃO --- */
+        #print-title { display: none; }
+        
+        @media print {
+            @page { size: landscape; margin: 5mm; }
+            
+            body { 
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important; 
+                background-color: #1f2937 !important; 
+                color: black !important; 
+                width: 100%;
+                height: auto;
+                overflow: visible;
+            }
+            
+            /* Elementos a esconder na impressão */
+            header button, header .flex-wrap, #filters-container, #backup-controls, #btn-new-record, .btn-action, .btn-save-manual, #delete-modal, #share-modal, #password-modal, #crud-modal, #main-message { 
+                display: none !important; 
+            }
+            
+            header { display: block !important; margin-bottom: 10px; padding: 10px !important; }
+            
+            /* KPIs na impressão */
+            .grid { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; }
+            .kpi-card { 
+                flex: 1; 
+                min-width: 150px; 
+                padding: 10px !important; 
+                border: 1px solid #000 !important; 
+                color: black !important; 
+                background-color: #f3f4f6 !important;
+            }
+            .kpi-card p { color: black !important; }
+            
+            /* Gráficos na impressão */
+            #charts-row { display: block !important; page-break-inside: avoid; }
+            .bg-gray-700 { 
+                background-color: white !important; 
+                color: black !important; 
+                border: 1px solid #000; 
+                box-shadow: none !important; 
+            }
+            .chart-container { 
+                height: 250px !important; 
+                width: 48% !important; 
+                display: inline-block !important; 
+                page-break-inside: avoid; 
+            }
+            
+            /* Listas Top 5 na impressão */
+            #top-lists-row { display: flex !important; margin-top: 20px; page-break-inside: avoid; }
+            
+            /* Tabela (Opcional: se quiser imprimir a tabela, descomente, mas o layout foca nos gráficos) */
+            .table-container-wrapper { display: none !important; }
+
+            #print-title { 
+                display: block !important; 
+                text-align: center; 
+                font-size: 24px; 
+                font-weight: bold; 
+                margin-bottom: 20px; 
+                color: black; 
+            }
+        }
+    </style>
+
+    <!-- Lógica da Aplicação -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, setDoc, onSnapshot, collection, query, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Funções Globais (Hoisting manual)
+        window.showMainMessage = (msg) => {
+            const el = document.getElementById('main-message');
+            if(el) {
+                el.textContent = msg;
+                setTimeout(() => el.textContent = '', 4000);
+            }
+        };
+
+        window.printDashboard = () => {
+            try {
+                window.focus();
+                setTimeout(() => window.print(), 100);
+            } catch (e) {
+                console.error("Erro ao imprimir:", e);
+                alert("Use Ctrl+P para imprimir.");
+            }
+        };
+
+        // Configuração Firebase (Substitua pelos seus dados reais para persistência na nuvem)
+        const yourFirebaseConfig = {
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        const COLLECTION_PATH = `fleet_data`; 
+        const LOCAL_STORAGE_KEY = 'fleet_data_backup_v21'; 
+
+        let app, db, auth;
+        let costChartInstance = null;
+        let quantityChartInstance = null;
+        
+        window.userId = null; 
+        window.fleetData = []; 
+        window.currentFilters = { status: 'TODOS', setor: 'TODOS', locadora: 'TODOS', search: '' };
+        window.currentSort = { column: null, direction: 'asc' };
+        window.isAuthReady = false;
+        window.isReadOnly = false; 
+        const ADMIN_PASSWORD = "Consorcio123"; 
+        const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const isConfigValid = yourFirebaseConfig.projectId && yourFirebaseConfig.projectId !== "YOUR_PROJECT_ID";
+        
+        if (isConfigValid) {
+            app = initializeApp(yourFirebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+        } else {
+            console.warn("Modo Demo/Local: Usando LocalStorage.");
+        }
+
+        async function authenticateAndSetup() {
+            if (!auth) { window.isAuthReady = true; return; }
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+                else await signInAnonymously(auth);
+                onAuthStateChanged(auth, (user) => {
+                    if (user) { window.userId = user.uid; window.isAuthReady = true; checkAndPopulateInitialData(); setupDataListener(); }
+                    else { window.isAuthReady = true; }
+                });
+            } catch (error) { console.error("Erro auth:", error); window.isAuthReady = true; }
+        }
+
+        // --- DADOS (Base completa da planilha) ---
+        const initialMockData = [
+            { status: "ATIVO", contrato: "CGRF177590", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE (CENTRO)", telemetria: "-", placa: "TDL7G92", modelo: "HB20", categoria: "CE", prefixo: "VL-160", liberado: "-", setor: "ADMINISTRAÇÃO", condutor: "CARLOS EDUARDO CAETANO DA SILVA", custoMensal: 3110.69, kmInicial: 27096, kmAtual: 27097, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "INATIVO", contrato: "26863377", locadora: "UNIDAS", cidadeLocacao: "TRES LAGOAS/MS", telemetria: "-", placa: "SYD0B04", modelo: "HB20 HYUNDAI", categoria: "B", prefixo: "VL-06", liberado: "-", setor: "ADMINISTRATIVO", condutor: "ATYLLA BATISTA CAMARGO", custoMensal: 2636.85, kmInicial: 0, kmAtual: 64793, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "70000", historicoRevisoes: [] },
+            { status: "INATIVO", contrato: "CGRF170076", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "SYF3B37", modelo: "MONTANA", categoria: "VP", prefixo: "-", liberado: "-", setor: "ADMINISTRATIVO", condutor: "JOSE JARIAN CAMARA", custoMensal: 3999.74, kmInicial: 0, kmAtual: 31926, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "INATIVO", contrato: "-", locadora: "COSAMPA", cidadeLocacao: "-", telemetria: "-", placa: "SYO2E42", modelo: "RENEGADE", categoria: "GC", prefixo: "-", liberado: "-", setor: "ADMINISTRATIVO", condutor: "LEONARDO MARQUES", custoMensal: 0, kmInicial: 0, kmAtual: 0, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "-", historicoRevisoes: [] },
+            { status: "INATIVO", contrato: "EDGA348696001", locadora: "LOCALIZA", cidadeLocacao: "NATAL", telemetria: "-", placa: "TCZ7A12", modelo: "SPIN", categoria: "RX", prefixo: "VL-68", liberado: "-", setor: "ADMINISTRATIVO", condutor: "VEICULO RESERVA", custoMensal: 0, kmInicial: 0, kmAtual: 0, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "-", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA137445", locadora: "LOCALIZA", cidadeLocacao: "SÃO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDE1J50", modelo: "S10", categoria: "VP (P)", prefixo: "VL-123", liberado: "-", setor: "ADMINISTRATIVO", condutor: "JOSE JARIAN CAMARA", custoMensal: 3647.62, kmInicial: 36420, kmAtual: 45132, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA129554", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEP6F85", modelo: "MOBI", categoria: "B", prefixo: "VL-80", liberado: "-", setor: "ADMINISTRATIVO", condutor: "UALAS ROQUE DA SILVA", custoMensal: 2650.37, kmInicial: 10, kmAtual: 18260, kmFinal: 0, ultimaRevisao: "10000", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRA325218", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE (AEROPORTO)", telemetria: "-", placa: "TCX2A46", modelo: "STRADA", categoria: "P", prefixo: "VL-21", liberado: "-", setor: "ADMINISTRATIVO", condutor: "ERINALDO ROBEERTO DA SILVA", custoMensal: 3394.61, kmInicial: 31707, kmAtual: 33562, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TCJ3E06", modelo: "ONIX", categoria: "CE", prefixo: "VL-44", liberado: "-", setor: "ADMINISTRATIVO", condutor: "FABIO ROQUE", custoMensal: 2889.26, kmInicial: 29185, kmAtual: 44957, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TCT1C04", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-41", liberado: "-", setor: "CIVIL", condutor: "LUIS CARLOS DA SILVA", custoMensal: 3030.05, kmInicial: 36399, kmAtual: 43640, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA134708", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEO2H53", modelo: "MOBI", categoria: "B", prefixo: "VL-105", liberado: "-", setor: "CIVIL", condutor: "MARCOS AURELIO DA SILVA", custoMensal: 2650.37, kmInicial: 0, kmAtual: 9346, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA125132", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL5G77", modelo: "MOBI", categoria: "B", prefixo: "VL-93", liberado: "-", setor: "CIVIL", condutor: "RODRIGO MENDES PEREIRA", custoMensal: 2650.37, kmInicial: 19140, kmAtual: 28164, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDP1C03", modelo: "MOBI", categoria: "B", prefixo: "VL-92", liberado: "-", setor: "CIVIL", condutor: "CARLOS JOSE DA SILVA", custoMensal: 2650.37, kmInicial: 12952, kmAtual: 22518, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E43", modelo: "KWID", categoria: "B", prefixo: "VL-157", liberado: "-", setor: "CIVIL", condutor: "JOSE ADRIANO DA SILVA", custoMensal: 2596.94, kmInicial: 100, kmAtual: 2952, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA131423", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDE5I88", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-97", liberado: "-", setor: "CIVIL", condutor: "ANDRE LUIZ OLIVEIRA SANTOS", custoMensal: 3515.57, kmInicial: 15949, kmAtual: 24620, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDZ2H11", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-102", liberado: "-", setor: "CIVIL", condutor: "GEORGE RODRIGUES DE SENA", custoMensal: 3114.72, kmInicial: 26158, kmAtual: 35489, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA129554", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TYA2J29", modelo: "POLO TRACK", categoria: "CE", prefixo: "VL-115", liberado: "-", setor: "CIVIL", condutor: "KIERLIN MOTA AMARILO", custoMensal: 3084.48, kmInicial: 5185, kmAtual: 13330, kmFinal: 0, ultimaRevisao: "10000", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "RECFA331430", locadora: "LOCALIZA", cidadeLocacao: "RECIFE", telemetria: "-", placa: "TCZ8E83", modelo: "HB20", categoria: "CE", prefixo: "VL-66", liberado: "NÃO", setor: "CIVIL", condutor: "MARCIA FERNANDES DA SILVA", custoMensal: 3515.57, kmInicial: 22800, kmAtual: 25703, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E44", modelo: "KWID", categoria: "B", prefixo: "VL-158", liberado: "NÃO", setor: "CIVIL", condutor: "JOSE CARLOS ALVES DA SILVA", custoMensal: 2596.94, kmInicial: 96, kmAtual: 2564, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E45", modelo: "KWID", categoria: "B", prefixo: "VL-159", liberado: "NÃO", setor: "CIVIL", condutor: "VALDECIO JOSE DA SILVA", custoMensal: 2596.94, kmInicial: 231, kmAtual: 3288, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7F30", modelo: "HB20", categoria: "CE", prefixo: "VL-91", liberado: "NÃO", setor: "COMPRAS", condutor: "BRUNO BEZERRA DA SILVA", custoMensal: 2889.26, kmInicial: 28110, kmAtual: 35670, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "RECFA331430", locadora: "LOCALIZA", cidadeLocacao: "RECIFE", telemetria: "-", placa: "TCZ8E82", modelo: "HB20", categoria: "CE", prefixo: "VL-65", liberado: "NÃO", setor: "COMPRAS", condutor: "JOSE ADALBERTO VIEIRA DA SILVA", custoMensal: 3515.57, kmInicial: 23000, kmAtual: 27446, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "RECFA331430", locadora: "LOCALIZA", cidadeLocacao: "RECIFE", telemetria: "-", placa: "TCZ8E81", modelo: "HB20", categoria: "CE", prefixo: "VL-64", liberado: "NÃO", setor: "CONTROLADORIA", condutor: "ALINE BARBOSA DA SILVA", custoMensal: 3515.57, kmInicial: 23200, kmAtual: 28564, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "RECFA331430", locadora: "LOCALIZA", cidadeLocacao: "RECIFE", telemetria: "-", placa: "TCZ8E80", modelo: "HB20", categoria: "CE", prefixo: "VL-63", liberado: "NÃO", setor: "CONTROLADORIA", condutor: "FLAVIO DE FARIAS VASCONCELOS", custoMensal: 3515.57, kmInicial: 22900, kmAtual: 26643, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G18", modelo: "HB20", categoria: "CE", prefixo: "VL-90", liberado: "NÃO", setor: "DIREÇÃO", condutor: "MARCIO LUIZ RIBEIRO", custoMensal: 2889.26, kmInicial: 18930, kmAtual: 34657, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDF8C25", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-100", liberado: "NÃO", setor: "FINANCEIRO", condutor: "BRUNO FARIAS DE VASCONCELOS", custoMensal: 3030.05, kmInicial: 25000, kmAtual: 34651, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G19", modelo: "HB20", categoria: "CE", prefixo: "VL-89", liberado: "NÃO", setor: "GESTAO", condutor: "MARCOS JUNIOR DA SILVA", custoMensal: 2889.26, kmInicial: 16780, kmAtual: 26786, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G20", modelo: "HB20", categoria: "CE", prefixo: "VL-88", liberado: "NÃO", setor: "GESTAO", condutor: "SAMARA VITALINA DA SILVA", custoMensal: 2889.26, kmInicial: 25011, kmAtual: 32145, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G21", modelo: "HB20", categoria: "CE", prefixo: "VL-87", liberado: "NÃO", setor: "GESTAO", condutor: "FLAVIO JUNIOR DE LIRA", custoMensal: 2889.26, kmInicial: 30089, kmAtual: 36452, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E40", modelo: "KWID", categoria: "B", prefixo: "VL-155", liberado: "-", setor: "GESTAO", condutor: "PAULO CEZAR DA SILVA", custoMensal: 2596.94, kmInicial: 103, kmAtual: 1973, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E41", modelo: "KWID", categoria: "B", prefixo: "VL-156", liberado: "-", setor: "GESTAO", condutor: "CLAUDIO JOSÉ VIEIRA DA SILVA", custoMensal: 2596.94, kmInicial: 104, kmAtual: 1958, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRA325218", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE (AEROPORTO)", telemetria: "-", placa: "TCX2B94", modelo: "STRADA", categoria: "P", prefixo: "VL-22", liberado: "-", setor: "MANUTENCAO", condutor: "ALBERTO BARBOSA DO NASCIMENTO", custoMensal: 3394.61, kmInicial: 33196, kmAtual: 37241, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRA325218", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE (AEROPORTO)", telemetria: "-", placa: "TCX2B95", modelo: "STRADA", categoria: "P", prefixo: "VL-23", liberado: "-", setor: "MANUTENCAO", condutor: "BRUNO FELIPE DA SILVA", custoMensal: 3394.61, kmInicial: 33451, kmAtual: 37984, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7F32", modelo: "HB20", categoria: "CE", prefixo: "VL-95", liberado: "-", setor: "MANUTENCAO", condutor: "JOSE CARLOS DA SILVA", custoMensal: 2889.26, kmInicial: 22680, kmAtual: 31527, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7F31", modelo: "HB20", categoria: "CE", prefixo: "VL-94", liberado: "-", setor: "MANUTENCAO", condutor: "JADSON DA SILVA LIMA", custoMensal: 2889.26, kmInicial: 29400, kmAtual: 34216, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDI6C02", modelo: "MOBI", categoria: "B", prefixo: "VL-85", liberado: "-", setor: "MANUTENCAO", condutor: "MARCIO ADRIANO DA SILVA", custoMensal: 2650.37, kmInicial: 21780, kmAtual: 29700, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA131423", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDE4G97", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-98", liberado: "-", setor: "MEIO AMBIENTE", condutor: "EVERTON LUIS DA SILVA", custoMensal: 3515.57, kmInicial: 13000, kmAtual: 25102, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA135562", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G49", modelo: "HB20", categoria: "CE", prefixo: "VL-111", liberado: "-", setor: "MEIO AMBIENTE", condutor: "VALDINEI ALVES DE SOUZA", custoMensal: 2889.26, kmInicial: 29900, kmAtual: 44708, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA135562", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G50", modelo: "HB20", categoria: "CE", prefixo: "VL-112", liberado: "-", setor: "MEIO AMBIENTE", condutor: "EDSON BEZERRA DA SILVA", custoMensal: 2889.26, kmInicial: 28090, kmAtual: 42000, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA131423", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDE5I87", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-99", liberado: "-", setor: "OPERAÇÕES", condutor: "JOSE CLECIO DE SOUZA", custoMensal: 3515.57, kmInicial: 15100, kmAtual: 24610, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA131423", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDE4G96", modelo: "SAVEIRO", categoria: "P", prefixo: "VL-96", liberado: "-", setor: "OPERAÇÕES", condutor: "PEDRO FELIPE DOS SANTOS", custoMensal: 3515.57, kmInicial: 15200, kmAtual: 24300, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "RBEF083850", locadora: "LOCALIZA", cidadeLocacao: "RIO BRANCO", telemetria: "-", placa: "TCY2G16", modelo: "STRADA", categoria: "P", prefixo: "VL-62", liberado: "-", setor: "OPERAÇÕES", condutor: "MOACY ALVES DE SOUZA", custoMensal: 3647.62, kmInicial: 33600, kmAtual: 39105, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA135562", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G48", modelo: "HB20", categoria: "CE", prefixo: "VL-113", liberado: "-", setor: "OPERAÇÕES", condutor: "MARIA BETANIA CORREIA DA SILVA", custoMensal: 2889.26, kmInicial: 22600, kmAtual: 30102, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDI6C03", modelo: "MOBI", categoria: "B", prefixo: "VL-82", liberado: "-", setor: "QUALIDADE", condutor: "JEFFERSON SILVA", custoMensal: 2650.37, kmInicial: 24528, kmAtual: 31245, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDI6C04", modelo: "MOBI", categoria: "B", prefixo: "VL-81", liberado: "-", setor: "QUALIDADE", condutor: "ELIAS RODRIGUES DE OLIVEIRA", custoMensal: 2650.37, kmInicial: 19089, kmAtual: 24630, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDI6C05", modelo: "MOBI", categoria: "B", prefixo: "VL-84", liberado: "-", setor: "QUALIDADE", condutor: "EDSON BATISTA DA SILVA ROCHA", custoMensal: 2650.37, kmInicial: 21630, kmAtual: 30300, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "26556010", locadora: "UNIDAS", cidadeLocacao: "SAO JOSE DO RIO PRETO", telemetria: "-", placa: "TXC6D99", modelo: "STRADA FREEDOM", categoria: "P", prefixo: "VL-116", liberado: "-", setor: "RMT AEREA", condutor: "LAERCIO JOSE DA SILVA RIBEIRO", custoMensal: 3818.64, kmInicial: 29778, kmAtual: 31147, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TCZ0D98", modelo: "ARGO", categoria: "CE", prefixo: "VL-78", liberado: "-", setor: "SALA TECNICA", condutor: "PAULO ABIGAEL BATISTA", custoMensal: 2889.26, kmInicial: 23900, kmAtual: 35155, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA129554", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDD3G92", modelo: "POLO TRACK", categoria: "CE", prefixo: "VL-103", liberado: "-", setor: "SALA TECNICA", condutor: "RAPHAEL DE OLIVEIRA BULCAO", custoMensal: 2889.26, kmInicial: 5293, kmAtual: 14322, kmFinal: 0, ultimaRevisao: "10000", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDL7G22", modelo: "HB20", categoria: "CE", prefixo: "VL-104", liberado: "-", setor: "SAUDE", condutor: "SAYONARA AGUIAR DA SILVA", custoMensal: 2889.26, kmInicial: 17025, kmAtual: 28892, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF166682", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE/MS", telemetria: "-", placa: "TDY5E38", modelo: "KWID", categoria: "B", prefixo: "VL-154", liberado: "-", setor: "SMS", condutor: "EMMANUEL CLAUDINO DO NASCIMENTO AMARAL", custoMensal: 2596.94, kmInicial: 110, kmAtual: 3114, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPF062979", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDY5E42", modelo: "KWID", categoria: "B", prefixo: "VL-79", liberado: "-", setor: "SMS", condutor: "JACKSON ALVES DE SOUZA", custoMensal: 2596.94, kmInicial: 5800, kmAtual: 11905, kmFinal: 0, ultimaRevisao: "10000", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF170910", locadora: "LOCALIZA", cidadeLocacao: "CAMPO GRANDE", telemetria: "-", placa: "TDY6I09", modelo: "KWID", categoria: "B", prefixo: "VL-95", liberado: "-", setor: "SMS", condutor: "MARCIO ANDRE DAMASCENO SILVA", custoMensal: 2656.75, kmInicial: 2264, kmAtual: 12923, kmFinal: 0, ultimaRevisao: "9768", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124674", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TCJ6F11", modelo: "KWID", categoria: "B", prefixo: "-", liberado: "-", setor: "SMS", condutor: "JAMILIA ALVES DOS SANTOS", custoMensal: 2596.94, kmInicial: 32376, kmAtual: 40314, kmFinal: 0, ultimaRevisao: "40000", proximaRevisao: "50000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "FORA872447", locadora: "LOCALIZA", cidadeLocacao: "FORTALEZA-CE (AEROPORTO)", telemetria: "-", placa: "TEO2I47", modelo: "HB20", categoria: "CE", prefixo: "VL-120", liberado: "-", setor: "SMS", condutor: "IGOR DOS SANTOS BEZERRA", custoMensal: 3084.48, kmInicial: 5000, kmAtual: 6831, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDD6A29", modelo: "MOBI", categoria: "B", prefixo: "VL-86", liberado: "-", setor: "TOPOGRAFIA", condutor: "EDILSON ALEXANDRE VITOR", custoMensal: 2596.94, kmInicial: 23640, kmAtual: 29300, kmFinal: 0, ultimaRevisao: "30000", proximaRevisao: "40000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA124853", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEE0H26", modelo: "MOBI", categoria: "B", prefixo: "VL-49", liberado: "-", setor: "TOPOGRAFIA", condutor: "JOSE RENATO BARROZO DE CARVALHO ", custoMensal: 2596.94, kmInicial: 10, kmAtual: 15256, kmFinal: 0, ultimaRevisao: "10000", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "CGRF170470", locadora: "LOCALIZA ", cidadeLocacao: "CAMPO GRANDE/MS ", telemetria: "-", placa: "TEC7I72", modelo: "HB20 ", categoria: "CE", prefixo: "VL-67", liberado: "-", setor: "TOPOGRAFIA", condutor: "CAIO MARQUES BARBOSA", custoMensal: 2889.26, kmInicial: 249, kmAtual: 9776, kmFinal: 0, ultimaRevisao: "9776", proximaRevisao: "20000", historicoRevisoes: [] },
+            { status: "INATIVO", contrato: "SRPA130058", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TDK3G06", modelo: "KWID", categoria: "B", prefixo: "VL-83", liberado: "-", setor: "TOPOGRAFIA", condutor: "MARCIO LACI", custoMensal: 2650.37, kmInicial: 13698, kmAtual: 20829, kmFinal: 0, ultimaRevisao: "20000", proximaRevisao: "30000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA134708", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEO0E01", modelo: "MOBI", categoria: "B", prefixo: "VL-106", liberado: "-", setor: "TOPOGRAFIA", condutor: "JOAO MARQUES BARBOSA", custoMensal: 2650.37, kmInicial: 0, kmAtual: 4200, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA136842", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEP5J53", modelo: "MOBI", categoria: "B", prefixo: "VL-107", liberado: "-", setor: "TOPOGRAFIA", condutor: "GREGORIO MANOEL DOS SANTOS", custoMensal: 2650.37, kmInicial: 0, kmAtual: 4300, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] },
+            { status: "ATIVO", contrato: "SRPA139060", locadora: "LOCALIZA", cidadeLocacao: "SAO JOSE DO RIO PRETO (AEROPORTO)", telemetria: "-", placa: "TEP5J50", modelo: "MOBI", categoria: "B", prefixo: "VL-108", liberado: "-", setor: "TOPOGRAFIA", condutor: "GREGORIO MANOEL DOS SANTOS", custoMensal: 2650.37, kmInicial: 0, kmAtual: 4300, kmFinal: 0, ultimaRevisao: "-", proximaRevisao: "10000", historicoRevisoes: [] }
+        ];
+        // MARKER: DATA_END
+
+        async function checkAndPopulateInitialData() {
+            if (!db) return;
+            const collectionRef = collection(db, COLLECTION_PATH);
+            try {
+                const snapshot = await getDocs(collectionRef);
+                if (snapshot.empty) {
+                    for (const item of initialMockData) {
+                        const { id, ...data } = item;
+                        await addDoc(collectionRef, data);
+                    }
+                }
+            } catch (e) {
+                console.error("Erro populate:", e);
+            }
+        }
+
+        function setupDataListener() {
+            if (!db) return;
+            const q = query(collection(db, COLLECTION_PATH));
+            onSnapshot(q, (snapshot) => {
+                window.fleetData = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    let custo = data.custoMensal;
+                    if (typeof custo === 'string') {
+                        custo = parseFloat(custo.replace('R$', '').replace(/\s/g, '').replace(',', '.'));
+                    }
+                    data.custoMensal = custo || 0;
+                    window.fleetData.push({ id: doc.id, ...data });
+                });
+                window.renderDashboard();
+            });
+        }
+
+        // --- FUNÇÕES DE PERSISTÊNCIA LOCAL ---
+        function autoSaveToLocal() {
+            if (window.isReadOnly) return; 
+            if (window.fleetData && window.fleetData.length > 0) {
+                try {
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(window.fleetData));
+                } catch (e) {
+                    console.error("Erro ao salvar no LocalStorage:", e);
+                }
+            }
+        }
+
+        function loadFromLocalOrMock() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedData = urlParams.get('d');
+            if (sharedData) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(escape(atob(sharedData))));
+                    if (Array.isArray(decoded) && decoded.length > 0) {
+                        return decoded.map((d, i) => ({ ...d, id: `share-${i}` }));
+                    }
+                } catch (e) { console.error("Erro URL:", e); }
+            }
+            try {
+                const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        return parsed.map((d, i) => ({ ...d, id: d.id || `local-${i}-${Date.now()}` }));
+                    }
+                }
+            } catch (e) { console.error("Erro LocalStorage:", e); }
+            return initialMockData.map((d, i) => ({ ...d, id: `mock-${i}` }));
+        }
+
+        // --- EXPORT / IMPORT ---
+        window.downloadBackup = () => {
+            if (!window.fleetData.length) return window.showMainMessage('Sem dados.');
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.fleetData));
+            const a = document.createElement('a');
+            a.setAttribute("href", dataStr);
+            a.setAttribute("download", `frota_backup_v21.json`);
+            document.body.appendChild(a); a.click(); a.remove();
+            window.showMainMessage('Backup baixado!');
+        };
+        window.triggerImport = () => document.getElementById('import-file-input').click();
+        window.handleImportFile = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        if(confirm(`Importar ${importedData.length} registros?`)) {
+                            window.fleetData = importedData.map((d, i) => ({ ...d, id: d.id || `imp-${i}` }));
+                            autoSaveToLocal(); window.renderDashboard(); window.showMainMessage('Importado!');
+                        }
+                    }
+                } catch (error) { alert("Arquivo inválido."); }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        };
+
+        window.exportDashboardToHTML = () => {
+            const dataToExport = JSON.stringify(window.fleetData);
+            let htmlContent = document.documentElement.outerHTML;
+            const regexData = /const initialMockData = \[[\s\S]*?\];/;
+            const replacementData = `const initialMockData = ${dataToExport};`;
+            const regexReadOnly = /window\.isReadOnly = false;/;
+            const replacementReadOnly = `window.isReadOnly = true;`;
+            
+            if (htmlContent.match(regexData) && htmlContent.match(regexReadOnly)) {
+                let newContent = htmlContent.replace(regexData, replacementData);
+                newContent = newContent.replace(regexReadOnly, replacementReadOnly);
+                const blob = new Blob([newContent], {type: 'text/html'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `dashboard_portatil.html`;
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                window.showMainMessage('Painel Portátil baixado!');
+                window.closeShareModal();
+            } else { alert("Erro ao exportar."); }
+        };
+
+        // --- COMPARTILHAR ---
+        window.copySummaryText = () => {
+            const filtered = window.getFilteredData();
+            const totalCost = filtered.reduce((acc, cur) => acc + cur.custoMensal, 0);
+            const text = `🚗 Resumo Frota\nVeículos: ${filtered.length}\nCusto: ${formatter.format(totalCost)}`;
+            
+            if (navigator.share) navigator.share({ title: 'Resumo', text }).catch(console.error);
+            else prompt("Copie:", text);
+        };
+
+        // --- RELATÓRIO ---
+        window.generateReport = () => {
+            if (!window.fleetData.length) return window.showMainMessage('Sem dados.');
+            const filtered = window.getFilteredData(); 
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a3'); 
+            
+            // Cabeçalho com totais
+            const totalCost = filtered.reduce((acc, cur) => acc + cur.custoMensal, 0);
+            const activeCount = filtered.filter(i => i.status === 'ATIVO').length;
+
+            doc.setFontSize(18); doc.setTextColor(249, 115, 22);
+            doc.text("Relatório Completo de Frota", 14, 22);
+            doc.setFontSize(12); doc.setTextColor(0);
+            doc.text(`Veículos Listados: ${filtered.length} | Ativos: ${activeCount} | Custo Total: ${formatter.format(totalCost)}`, 14, 30);
+            doc.setFontSize(10); doc.setTextColor(100);
+            doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 36);
+
+            const tableData = filtered.map(i => [
+                i.status, i.contrato, i.locadora, i.cidadeLocacao, i.telemetria, i.placa, i.modelo, i.categoria, i.prefixo, i.liberado, i.setor, i.condutor, 
+                formatter.format(i.custoMensal), i.kmInicial, i.kmAtual, i.kmFinal, i.ultimaRevisao, i.proximaRevisao
+            ]);
+
+            doc.autoTable({
+                startY: 42,
+                head: [['Status', 'Contrato', 'Locadora', 'Cidade', 'Tel.', 'Placa', 'Modelo', 'Cat.', 'Pref.', 'Lib.', 'Setor', 'Condutor', 'Custo', 'KM Ini', 'KM Atu', 'KM Fim', 'Últ. Rev.', 'Próx. Rev.']],
+                body: tableData,
+                styles: { fontSize: 6, cellPadding: 1 }, 
+                headStyles: { fillColor: [31, 41, 55] }
+            });
+            doc.save('relatorio_completo.pdf');
+        };
+
+        // --- Lógica App ---
+        window.applyFilter = (type, value) => {
+            if(!window.currentFilters) window.currentFilters = { status: 'TODOS', setor: 'TODOS', locadora: 'TODOS', search: '' };
+            window.currentFilters[type] = type === 'search' ? value.toLowerCase() : value;
+            window.renderDashboard();
+        };
+
+        window.sortTable = (column) => {
+            if (window.currentSort.column === column) {
+                window.currentSort.direction = window.currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                window.currentSort.column = column;
+                window.currentSort.direction = 'asc';
+            }
+            window.renderDashboard();
+        };
+
+        window.getFilteredData = () => {
+            if (!window.fleetData) return [];
+            let data = window.fleetData.filter(item => {
+                const f = window.currentFilters;
+                const matchStatus = f.status === 'TODOS' || item.status === f.status;
+                const matchSetor = f.setor === 'TODOS' || item.setor === f.setor;
+                const matchLocadora = f.locadora === 'TODOS' || item.locadora === f.locadora;
+                const s = f.search;
+                const matchSearch = !s || (item.condutor && item.condutor.toLowerCase().includes(s)) || (item.placa && item.placa.toLowerCase().includes(s)) || (item.prefixo && item.prefixo.toLowerCase().includes(s));
+                return matchStatus && matchSetor && matchLocadora && matchSearch;
+            });
+
+            if (window.currentSort.column) {
+                const col = window.currentSort.column;
+                const dir = window.currentSort.direction === 'asc' ? 1 : -1;
+                data.sort((a, b) => {
+                    const valA = (a[col] || '').toString().toLowerCase();
+                    const valB = (b[col] || '').toString().toLowerCase();
+                    return valA.localeCompare(valB) * dir;
+                });
+            }
+            return data;
+        };
+
+        window.renderDashboard = () => {
+            if (!window.fleetData) return;
+            
+            const isLocked = window.isReadOnly;
+            document.getElementById('btn-new-record').classList.toggle('hidden', isLocked);
+            document.getElementById('backup-controls').classList.toggle('hidden', isLocked);
+            document.getElementById('btn-save-manual-container').classList.toggle('hidden', isLocked); // Esconde botão manual
+            document.getElementById('btn-unlock-mode').classList.toggle('hidden', !isLocked);
+            document.getElementById('main-message').textContent = isLocked ? "Modo Visualização" : "";
+
+            let filtered = window.getFilteredData();
+
+            // KPIs
+            const totalCost = filtered.reduce((acc, cur) => acc + cur.custoMensal, 0);
+            const activeCount = filtered.filter(i => i.status === 'ATIVO').length;
+            const avgCost = filtered.length ? totalCost / filtered.length : 0;
+
+            document.getElementById('total-cost-kpi').textContent = formatter.format(totalCost);
+            document.getElementById('avg-cost-kpi').textContent = formatter.format(avgCost);
+            document.getElementById('active-vehicles-kpi').textContent = activeCount;
+
+            // Filtros Dropdown
+            const updateSel = (id, k) => {
+                const set = new Set(window.fleetData.map(i => i[k]));
+                const opts = [...set].filter(Boolean).sort();
+                const sel = document.getElementById(id);
+                const curr = sel.value;
+                sel.innerHTML = `<option value="TODOS">Todos</option>`;
+                opts.forEach(o => {
+                    const op = document.createElement('option'); op.value=o; op.textContent=o;
+                    if(o===curr) op.selected=true; sel.appendChild(op);
+                });
+            };
+            updateSel('filter-setor', 'setor');
+            updateSel('filter-locadora', 'locadora');
+
+            // Tabela
+            const tbody = document.getElementById('data-table-body');
+            tbody.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                document.getElementById('empty-table-message').classList.remove('hidden');
+            } else {
+                document.getElementById('empty-table-message').classList.add('hidden');
+                filtered.forEach(item => {
+                    const safeId = item.id;
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-700 transition duration-150 group border-b border-gray-700';
+                    
+                    // Lógica de Alerta de Revisão
+                    const formatRev = (d) => {
+                        if (!d || d === '-') return '-';
+                        // Tenta converter para número se for KM
+                        const kmRev = parseInt(d);
+                        const kmAtual = item.kmAtual ? parseInt(item.kmAtual) : 0;
+                        
+                        // Se for um número válido e tiver KM atual, compara
+                        if (!isNaN(kmRev) && kmAtual > 0) {
+                            // Se faltar menos de 1000km ou já passou
+                            if (kmAtual >= kmRev - 1000) {
+                                return `<span class="text-red-400 font-bold flex items-center justify-center"><span class="mr-1">⚠️</span> ${d}</span>`;
+                            }
+                        }
+                        return d;
+                    };
+
+                    const actions = isLocked ? '' : `
+                        <div class="flex justify-center space-x-2">
+                            <button onclick="event.stopPropagation(); window.openModal('crud-modal', '${safeId}')" class="text-indigo-400 p-1" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
+                            <button onclick="event.stopPropagation(); window.showHistory('${safeId}')" class="text-yellow-400 p-1" title="Histórico Revisão"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></button>
+                            <button onclick="event.stopPropagation(); window.openDeleteModal('${safeId}')" class="text-red-400 p-1" title="Excluir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                        </div>`;
+
+                    tr.innerHTML = `
+                        <td class="dense-cell"><span class="px-2 py-0.5 text-xs rounded-full ${item.status === 'ATIVO' ? 'bg-green-900 text-green-200' : 'bg-red-900 text-red-200'}">${item.status}</span></td>
+                        <td class="dense-cell text-gray-300">${item.contrato||'-'}</td>
+                        <td class="dense-cell text-gray-300">${item.locadora||'-'}</td>
+                        <td class="dense-cell text-gray-300">${item.cidadeLocacao||'-'}</td>
+                        <td class="dense-cell text-center"><span class="px-2 py-0.5 text-xs rounded ${item.telemetria === 'SIM' ? 'bg-blue-900 text-blue-200' : 'bg-gray-700 text-gray-400'}">${item.telemetria||'NÃO'}</span></td>
+                        <td class="dense-cell text-white font-bold">${item.placa}</td>
+                        <td class="dense-cell text-gray-300">${item.modelo}</td>
+                        <td class="dense-cell text-gray-400">${item.categoria||'-'}</td>
+                        <td class="dense-cell text-orange-300 font-bold">${item.prefixo||'-'}</td>
+                        <td class="dense-cell text-gray-300">${item.liberado||'-'}</td>
+                        <td class="dense-cell text-gray-300">${item.setor}</td>
+                        <td class="dense-cell text-gray-300 max-w-xs truncate" title="${item.condutor}">${item.condutor}</td>
+                        <td class="dense-cell text-right text-orange-300">${formatter.format(item.custoMensal)}</td>
+                        <td class="dense-cell text-right text-blue-300">${item.kmInicial||0}</td>
+                        <td class="dense-cell text-right text-white font-bold">${item.kmAtual||0}</td>
+                        <td class="dense-cell text-right text-gray-500">${item.kmFinal||'-'}</td>
+                        <td class="dense-cell text-center text-gray-300">${item.ultimaRevisao||'-'}</td>
+                        <td class="dense-cell text-center ${item.proximaRevisao ? 'text-yellow-300': 'text-gray-500'}">${formatRev(item.proximaRevisao)}</td>
+                        <td class="dense-cell text-center">${actions}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            const grouped = {};
+            filtered.forEach(i => {
+                if(!grouped[i.setor]) grouped[i.setor] = { cost: 0, count: 0 };
+                grouped[i.setor].cost += i.custoMensal;
+                grouped[i.setor].count++;
+            });
+            const labels = Object.keys(grouped);
+            const costData = labels.map(l => grouped[l].cost);
+            const countData = labels.map(l => grouped[l].count);
+            
+            // LISTAS TOP 5
+            const topSetoresCusto = Object.entries(grouped).sort(([,a], [,b]) => b.cost - a.cost).slice(0,5);
+            const topSetoresQtd = Object.entries(grouped).sort(([,a], [,b]) => b.count - a.count).slice(0,5);
+
+            const listCusto = document.getElementById('top-setores-custo');
+            listCusto.innerHTML = '';
+            topSetoresCusto.forEach(([setor, val], idx) => {
+                 listCusto.innerHTML += `<div class="flex items-center justify-between p-2 bg-gray-800 rounded border-b border-gray-700 hover:bg-gray-700 transition"><div class="flex items-center"><span class="text-orange-400 font-bold mr-3">#${idx+1}</span><div><p class="text-sm font-bold text-white">${setor}</p></div></div><div class="text-right"><p class="text-sm font-bold text-orange-300">${formatter.format(val.cost)}</p></div></div>`;
+            });
+
+            const listQtd = document.getElementById('top-setores-qtd');
+            listQtd.innerHTML = '';
+            topSetoresQtd.forEach(([setor, val], idx) => {
+                 listQtd.innerHTML += `<div class="flex items-center justify-between p-2 bg-gray-800 rounded border-b border-gray-700 hover:bg-gray-700 transition"><div class="flex items-center"><span class="text-blue-400 font-bold mr-3">#${idx+1}</span><div><p class="text-sm font-bold text-white">${setor}</p></div></div><div class="text-right"><p class="text-sm font-bold text-blue-300">${val.count} veículos</p></div></div>`;
+            });
+
+            if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
+            const opts = { responsive: true, maintainAspectRatio: false, layout: {padding:{top:20}}, plugins: { legend: {labels:{color:'#9ca3af'}}, datalabels:{color:'white', anchor:'end', align:'end', offset:-4} }, scales: {y:{beginAtZero:true, grid:{color:'#374151'}}, x:{grid:{display:false}}} };
+            const optsCost = JSON.parse(JSON.stringify(opts));
+            optsCost.plugins.datalabels.formatter = (val) => 'R$ ' + (val/1000).toFixed(0) + 'k';
+
+            if(quantityChartInstance) quantityChartInstance.destroy();
+            quantityChartInstance = new Chart(document.getElementById('quantityChart'), {type:'bar', data:{labels, datasets:[{label:'Qtd Veículos', data:countData, backgroundColor:'rgba(59,130,246,0.8)'}]}, options:opts});
+
+            if(costChartInstance) costChartInstance.destroy();
+            costChartInstance = new Chart(document.getElementById('costChart'), {type:'bar', data:{labels, datasets:[{label:'Custo Total (R$)', data:costData, backgroundColor:'rgba(249,115,22,0.8)'}]}, options:optsCost});
+        };
+
+        window.openPasswordModal = () => { document.getElementById('password-modal').classList.remove('hidden'); document.getElementById('password-modal').classList.add('flex'); };
+        window.closePasswordModal = () => { document.getElementById('password-modal').classList.add('hidden'); document.getElementById('password-modal').classList.remove('flex'); };
+        window.attemptUnlock = () => { if(document.getElementById('unlock-password').value === ADMIN_PASSWORD) { window.isReadOnly = false; window.renderDashboard(); window.closePasswordModal(); window.showMainMessage("Desbloqueado!"); } else alert("Senha incorreta"); };
+        window.openShareModal = () => { document.getElementById('share-modal').classList.remove('hidden'); document.getElementById('share-modal').classList.add('flex'); };
+        window.closeShareModal = () => { document.getElementById('share-modal').classList.add('hidden'); document.getElementById('share-modal').classList.remove('flex'); };
+        window.openDeleteModal = (id) => { if(!window.isReadOnly) { window.pendingDeleteId = id; document.getElementById('delete-modal').classList.remove('hidden'); document.getElementById('delete-modal').classList.add('flex'); }};
+        window.closeDeleteModal = () => { document.getElementById('delete-modal').classList.add('hidden'); document.getElementById('delete-modal').classList.remove('flex'); };
+        window.confirmDeleteAction = () => { if(window.isReadOnly) return; if(!isConfigValid) { window.fleetData = window.fleetData.filter(i => String(i.id) !== String(window.pendingDeleteId)); autoSaveToLocal(); window.renderDashboard(); window.closeDeleteModal(); window.showMainMessage('Deletado'); }};
+        window.openModal = (id, recordId) => {
+            if (window.isReadOnly) return;
+            const modal = document.getElementById(id);
+            document.getElementById('crud-form').reset();
+            document.getElementById('record-id').value = '';
+            if (recordId) {
+                const record = window.fleetData.find(r => String(r.id) === String(recordId));
+                if(record) {
+                    document.getElementById('modal-title').textContent = `Editar: ${record.placa}`;
+                    document.getElementById('record-id').value = record.id;
+                    const fields = ['contrato', 'locadora', 'cidade', 'telemetria', 'placa', 'modelo', 'categoria', 'prefixo', 'liberado', 'condutor-primario', 'funcao-condutor', 'cnh-primario', 'condutor-secundario', 'funcao-condutor-secundario', 'cnh-secundario', 'setor', 'status', 'custo', 'km-inicial', 'km-atual', 'km-final', 'ultima-revisao', 'proxima-revisao'];
+                    const keys = ['contrato', 'locadora', 'cidadeLocacao', 'telemetria', 'placa', 'modelo', 'categoria', 'prefixo', 'liberado', 'condutor', 'funcaoCondutor', 'cnhPrimario', 'condutorSecundario', 'funcaoCondutorSecundario', 'cnhSecundario', 'setor', 'status', 'custoMensal', 'kmInicial', 'kmAtual', 'kmFinal', 'ultimaRevisao', 'proximaRevisao'];
+                    fields.forEach((fid, idx) => { const el = document.getElementById(`modal-${fid}`); if(el) el.value = record[keys[idx]] || ''; });
+                    const chk = record.checklist || {};
+                    document.getElementById('chk-cnh').checked = !!chk.cnh; document.getElementById('chk-contrato').checked = !!chk.contrato; document.getElementById('chk-documento').checked = !!chk.documento; document.getElementById('chk-termo').checked = !!chk.termo;
+                }
+            } else { document.getElementById('modal-title').textContent = 'Novo Veículo'; document.getElementById('modal-status').value = 'ATIVO'; }
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+        };
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); };
+        window.showHistory = (id) => { const record = window.fleetData.find(r => String(r.id) === String(id)); if(!record) return; const hist = record.historicoRevisoes || []; alert(`Histórico de Revisões - ${record.placa}:\n\n${hist.map(h => h.data).join('\n') || 'Sem histórico'}`); };
+        
+        document.getElementById('crud-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const oldId = document.getElementById('record-id').value;
+            let existingRecord = null; if(oldId) existingRecord = window.fleetData.find(r => String(r.id) === String(oldId));
+            const newVal = {
+                id: oldId || null,
+                contrato: document.getElementById('modal-contrato').value.toUpperCase().trim(),
+                locadora: document.getElementById('modal-locadora').value,
+                cidadeLocacao: document.getElementById('modal-cidade').value.toUpperCase().trim(),
+                telemetria: document.getElementById('modal-telemetria').value,
+                placa: document.getElementById('modal-placa').value.toUpperCase().trim(),
+                modelo: document.getElementById('modal-modelo').value.toUpperCase().trim(),
+                categoria: document.getElementById('modal-categoria').value.toUpperCase().trim(),
+                prefixo: document.getElementById('modal-prefixo').value.toUpperCase().trim(),
+                liberado: document.getElementById('modal-liberado').value,
+                condutor: document.getElementById('modal-condutor-primario').value.toUpperCase().trim(),
+                funcaoCondutor: document.getElementById('modal-funcao-condutor').value.toUpperCase().trim(),
+                cnhPrimario: document.getElementById('modal-cnh-primario').value.trim(),
+                condutorSecundario: document.getElementById('modal-condutor-secundario').value.toUpperCase().trim(),
+                funcaoCondutorSecundario: document.getElementById('modal-funcao-condutor-secundario').value.toUpperCase().trim(),
+                cnhSecundario: document.getElementById('modal-cnh-secundario').value.trim(),
+                setor: document.getElementById('modal-setor').value.toUpperCase().trim(),
+                status: document.getElementById('modal-status').value,
+                custoMensal: parseFloat(document.getElementById('modal-custo').value) || 0,
+                kmInicial: parseInt(document.getElementById('modal-km-inicial').value) || 0,
+                kmAtual: parseInt(document.getElementById('modal-km-atual').value) || 0,
+                kmFinal: parseInt(document.getElementById('modal-km-final').value) || 0,
+                ultimaRevisao: document.getElementById('modal-ultima-revisao').value,
+                proximaRevisao: document.getElementById('modal-proxima-revisao').value,
+                checklist: { cnh: document.getElementById('chk-cnh').checked, contrato: document.getElementById('chk-contrato').checked, documento: document.getElementById('chk-documento').checked, termo: document.getElementById('chk-termo').checked },
+                historicoRevisoes: existingRecord ? (existingRecord.historicoRevisoes || []) : []
+            };
+            if (existingRecord && existingRecord.ultimaRevisao !== newVal.ultimaRevisao && newVal.ultimaRevisao) { if(existingRecord.ultimaRevisao) newVal.historicoRevisoes.push({ data: existingRecord.ultimaRevisao, obs: 'Data anterior' }); }
+            if (!isConfigValid) { if (newVal.id) { const idx = window.fleetData.findIndex(i => String(i.id) === String(newVal.id)); if (idx > -1) window.fleetData[idx] = newVal; } else { newVal.id = 'local-' + Date.now(); window.fleetData.push(newVal); } autoSaveToLocal(); window.renderDashboard(); window.showMainMessage('Salvo!'); window.closeModal('crud-modal'); }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => { if (isConfigValid) authenticateAndSetup(); else { window.fleetData = loadFromLocalOrMock(); window.isAuthReady = true; window.renderDashboard(); window.showMainMessage('Carregado.'); } });
+    </script>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <!-- Título Específico para Impressão -->
+    <div id="print-title" class="hidden text-center text-black font-bold text-2xl mb-6 print:block">Relatório Executivo de Frota</div>
+
+    <!-- CABEÇALHO ESCONDIDO NA IMPRESSÃO -->
+    <header class="mb-8 p-4 bg-gray-700 rounded-lg shadow-xl flex flex-col xl:flex-row justify-between items-center gap-4">
+        <div class="flex-1"><h1 class="text-3xl font-bold text-orange-500">Gestão de Frota</h1><div class="text-sm mt-1 text-gray-400"><span id="main-message" class="font-semibold text-orange-300"></span></div></div>
+        <div class="flex flex-wrap gap-3 items-center justify-center">
+            <button id="btn-unlock-mode" onclick="window.openPasswordModal()" class="hidden btn-secondary py-2 px-4 rounded-lg font-semibold shadow-md flex items-center border border-gray-500 hover:bg-gray-600"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg> Desbloquear</button>
+            
+            <!-- BOTÃO SALVAR MANUAL -->
+            <div id="btn-save-manual-container" class="flex gap-2 p-1 bg-gray-800 rounded-lg border border-gray-600">
+                <button onclick="window.forceManualSave()" class="btn-save-manual flex items-center px-3 py-2 text-sm rounded font-bold shadow-md" title="Forçar salvamento">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    Salvar Alterações
+                </button>
+            </div>
+            
+            <!-- Botão de IMPRIMIR DASHBOARD -->
+            <button onclick="window.printDashboard()" class="btn-action flex items-center px-3 py-2 text-sm rounded border border-gray-500 hover:bg-gray-600" title="Imprimir Visualização">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                Imprimir
+            </button>
+
+            <div class="flex gap-2 p-1 bg-gray-800 rounded-lg border border-gray-600">
+                <button onclick="window.generateReport()" class="btn-action flex items-center px-3 py-2 text-sm rounded" title="PDF">Relatório</button>
+                <button onclick="window.openShareModal()" class="btn-action flex items-center px-3 py-2 text-sm rounded" title="Compartilhar">Compartilhar</button>
+            </div>
+            <div id="backup-controls" class="flex gap-2 p-1 bg-gray-800 rounded-lg border border-gray-600">
+                <button onclick="window.downloadBackup()" class="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded">Backup</button>
+                <div class="w-px bg-gray-600 mx-1"></div>
+                <button onclick="window.triggerImport()" class="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded">Restaurar</button>
+                <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="window.handleImportFile(event)">
+            </div>
+            <button id="btn-new-record" onclick="window.openModal('crud-modal', null)" class="btn-primary py-2 px-6 rounded-lg font-semibold shadow-md flex items-center transform hover:scale-105"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> Novo</button>
+        </div>
+    </header>
+
+    <!-- KPIs (3 Colunas) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="kpi-card p-6 rounded-lg shadow-md"><p class="text-sm text-gray-400">Custo Mensal Total</p><p class="text-3xl font-extrabold text-white mt-1" id="total-cost-kpi">R$ 0,00</p></div>
+        <div class="kpi-card p-6 rounded-lg shadow-md"><p class="text-sm text-gray-400">Custo Médio/Veículo</p><p class="text-3xl font-extrabold text-white mt-1" id="avg-cost-kpi">R$ 0,00</p></div>
+        <div class="kpi-card p-6 rounded-lg shadow-md"><p class="text-sm text-gray-400">Veículos Ativos</p><p class="text-3xl font-extrabold text-white mt-1" id="active-vehicles-kpi">0</p></div>
+    </div>
+
+    <!-- Gráficos -->
+    <div id="charts-row" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md h-96 flex flex-col"><h2 class="text-xl font-semibold mb-4 text-blue-400">Quantidade por Setor</h2><div class="chart-container flex-grow relative"><canvas id="quantityChart"></canvas></div></div>
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md h-96 flex flex-col"><h2 class="text-xl font-semibold mb-4 text-orange-400">Custos por Setor</h2><div class="chart-container flex-grow relative"><canvas id="costChart"></canvas></div></div>
+    </div>
+
+    <!-- Top Lists -->
+    <div id="top-lists-row" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4 text-blue-400">Top 5 Setores (Quantidade)</h2>
+            <div id="top-setores-qtd" class="space-y-2"></div>
+        </div>
+        <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4 text-orange-400">Top 5 Setores (Custo)</h2>
+            <div id="top-setores-custo" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- RESTO DO CÓDIGO (FILTROS, TABELA, MODAIS) -->
+    <div id="filters-container" class="bg-gray-700 p-6 rounded-lg shadow-md mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div><label class="block text-sm font-medium text-gray-300 mb-1">Status</label><select id="filter-status" onchange="window.applyFilter('status', this.value)" class="w-full p-2 rounded-lg input-dark"><option value="TODOS">Todos</option><option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-1">Setor</label><select id="filter-setor" onchange="window.applyFilter('setor', this.value)" class="w-full p-2 rounded-lg input-dark"><option value="TODOS">Todos</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-1">Locadora</label><select id="filter-locadora" onchange="window.applyFilter('locadora', this.value)" class="w-full p-2 rounded-lg input-dark"><option value="TODOS">Todas</option></select></div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-1">Buscar</label><input type="text" oninput="window.applyFilter('search', this.value)" placeholder="Placa, Condutor, Contrato..." class="w-full p-2 rounded-lg input-dark" /></div>
+    </div>
+
+    <div class="table-container-wrapper bg-gray-700 p-6 rounded-lg shadow-md overflow-hidden mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-orange-400">Detalhes da Frota</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-600">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('status')">Status ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('contrato')">Contrato ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('locadora')">Locadora ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('cidadeLocacao')">Cidade ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase">Tel.</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('placa')">Placa ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase">Modelo</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('categoria')">Cat. ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('prefixo')">Pref. ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase">Lib.</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('setor')">Setor ↕</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase">Condutor</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase sortable" onclick="window.sortTable('custoMensal')">Custo ↕</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase">KM Ini</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase">KM Atu</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase">KM Fim</th>
+                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase">Últ. Rev.</th>
+                        <th class="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase">Próx. Rev.</th>
+                        <th id="action-header" class="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="data-table-body" class="divide-y divide-gray-700"></tbody>
+            </table>
+        </div>
+        <p id="empty-table-message" class="text-center text-gray-400 py-6 hidden">Nenhum registro encontrado.</p>
+    </div>
+
+    <div id="delete-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm"><div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-600 p-6 text-center"><h3 class="text-lg font-medium text-white mb-4">Excluir?</h3><div class="flex justify-center space-x-4"><button onclick="window.closeDeleteModal()" class="px-4 py-2 bg-gray-600 text-white rounded">Cancelar</button><button onclick="window.confirmDeleteAction()" class="px-4 py-2 bg-red-600 text-white rounded">Sim</button></div></div></div>
+    <div id="share-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm"><div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-600 p-6"><h3 class="text-xl font-bold text-orange-500 mb-4">Compartilhar</h3><div class="space-y-3"><button onclick="window.exportDashboardToHTML()" class="w-full flex items-center justify-between px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded text-white"><span>Baixar Painel Portátil (Bloqueado)</span></button><button onclick="window.copySummaryText()" class="w-full flex items-center justify-between px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded text-white"><span>Copiar Resumo WhatsApp</span></button><button onclick="window.closeShareModal()" class="w-full mt-2 text-gray-400 hover:text-white text-sm">Fechar</button></div></div></div>
+    <div id="password-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm"><div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm border border-gray-600 p-6 text-center"><h3 class="text-lg font-medium text-white mb-2">Senha Admin</h3><input type="password" id="unlock-password" class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600"><div class="flex justify-center space-x-4"><button onclick="window.closePasswordModal()" class="px-4 py-2 bg-gray-600 text-white rounded">Cancelar</button><button onclick="window.attemptUnlock()" class="px-4 py-2 bg-blue-600 text-white rounded">OK</button></div></div></div>
+
+    <div id="crud-modal" class="fixed inset-0 bg-gray-900 bg-opacity-80 hidden items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div class="bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl border border-gray-600 modal-animate overflow-y-auto max-h-[95vh]">
+            <div class="flex justify-between items-center p-6 border-b border-gray-700 bg-gray-750 rounded-t-xl">
+                <h3 class="text-2xl font-bold text-orange-500" id="modal-title">Veículo</h3>
+                <button onclick="window.closeModal('crud-modal')" class="text-gray-400 hover:text-white">X</button>
+            </div>
+            <form id="crud-form" class="p-6 grid grid-cols-1 gap-6">
+                <input type="hidden" id="record-id">
+                
+                <div class="p-4 bg-gray-750 border border-gray-600 rounded-lg">
+                    <h4 class="text-sm font-bold text-gray-300 mb-3 uppercase border-b border-gray-600 pb-1">Contrato & Locação</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="text-xs text-gray-400">Nº Contrato</label><input type="text" id="modal-contrato" class="w-full p-2 rounded input-dark"></div>
+                        <div><label class="text-xs text-gray-400">Locadora</label><select id="modal-locadora" class="w-full p-2 rounded input-dark"><option>LOCALIZA</option><option>MOVIDA</option><option>UNIDAS</option><option>OUTROS</option></select></div>
+                        <div><label class="text-xs text-gray-400">Cidade</label><input type="text" id="modal-cidade" class="w-full p-2 rounded input-dark uppercase"></div>
+                        <div><label class="text-xs text-gray-400">Telemetria</label><select id="modal-telemetria" class="w-full p-2 rounded input-dark"><option>SIM</option><option>NÃO</option></select></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div><label class="text-xs text-gray-400">Placa</label><input type="text" id="modal-placa" required class="w-full p-2 rounded input-dark uppercase font-bold"></div>
+                    <div><label class="text-xs text-gray-400">Modelo</label><input type="text" id="modal-modelo" required class="w-full p-2 rounded input-dark"></div>
+                    <div><label class="text-xs text-gray-400">Categoria</label><input type="text" id="modal-categoria" class="w-full p-2 rounded input-dark uppercase"></div>
+                    <div><label class="text-xs text-gray-400">Prefixo</label><input type="text" id="modal-prefixo" class="w-full p-2 rounded input-dark uppercase font-bold text-orange-400"></div>
+                    <div><label class="text-xs text-gray-400">Liberado Para</label><select id="modal-liberado" class="w-full p-2 rounded input-dark"><option>OBRA</option><option>CIDADE</option><option>OBRA/CIDADE</option></select></div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-3 border border-gray-600 rounded bg-gray-750">
+                        <h5 class="text-xs font-bold text-orange-400 mb-2">Condutor Primário</h5>
+                        <input type="text" id="modal-condutor-primario" placeholder="Nome" class="w-full p-2 mb-2 rounded input-dark">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="modal-funcao-condutor" placeholder="Função" class="w-full p-2 rounded input-dark">
+                            <input type="text" id="modal-cnh-primario" placeholder="CNH" class="w-full p-2 rounded input-dark">
+                        </div>
+                    </div>
+                    <div class="p-3 border border-gray-600 rounded bg-gray-750">
+                        <h5 class="text-xs font-bold text-blue-400 mb-2">Condutor Secundário</h5>
+                        <input type="text" id="modal-condutor-secundario" placeholder="Nome" class="w-full p-2 mb-2 rounded input-dark">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="modal-funcao-condutor-secundario" placeholder="Função" class="w-full p-2 rounded input-dark">
+                            <input type="text" id="modal-cnh-secundario" placeholder="CNH" class="w-full p-2 rounded input-dark">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><label class="text-xs text-gray-400">Setor</label><input list="sector-options" id="modal-setor" class="w-full p-2 rounded input-dark uppercase"></div>
+                    <div><label class="text-xs text-gray-400">Status</label><select id="modal-status" class="w-full p-2 rounded input-dark"><option>ATIVO</option><option>INATIVO</option></select></div>
+                    <div><label class="text-xs text-gray-400">Custo Mensal</label><input type="number" step="0.01" id="modal-custo" class="w-full p-2 rounded input-dark"></div>
+                </div>
+
+                <div class="p-4 bg-gray-900 border border-gray-700 rounded-lg shadow-inner">
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div class="md:col-span-3 grid grid-cols-3 gap-2 border-r border-gray-700 pr-4">
+                            <div><label class="text-xs text-blue-300">KM Inicial</label><input type="number" id="modal-km-inicial" class="w-full p-2 rounded input-dark text-right"></div>
+                            <div><label class="text-xs text-white font-bold">KM Atual</label><input type="number" id="modal-km-atual" class="w-full p-2 rounded input-dark text-right font-bold bg-gray-800 border-orange-500"></div>
+                            <div><label class="text-xs text-gray-500">KM Final</label><input type="number" id="modal-km-final" class="w-full p-2 rounded input-dark text-right"></div>
+                        </div>
+                        <div class="md:col-span-2 grid grid-cols-2 gap-2">
+                            <!-- Mudança: type="text" para aceitar KM ou Data -->
+                            <div><label class="text-xs text-green-400">Última Revisão</label><input type="text" id="modal-ultima-revisao" placeholder="Data ou KM" class="w-full p-2 rounded input-dark text-sm"></div>
+                            <div><label class="text-xs text-yellow-400">Próxima Revisão</label><input type="text" id="modal-proxima-revisao" placeholder="Data ou KM" class="w-full p-2 rounded input-dark text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-400">
+                    <label class="checkbox-wrapper"><input type="checkbox" id="chk-cnh"> CNH Válida</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="chk-contrato"> Contrato</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="chk-documento"> Documento</label>
+                    <label class="checkbox-wrapper"><input type="checkbox" id="chk-termo"> Termo Resp.</label>
+                </div>
+
+                <div class="flex justify-end space-x-4 pt-4 border-t border-gray-700">
+                    <button type="button" onclick="window.closeModal('crud-modal')" class="px-6 py-2 rounded bg-gray-600 text-white">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 rounded bg-orange-600 text-white font-bold shadow-lg hover:bg-orange-500">Salvar Dados</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <datalist id="sector-options"></datalist>
+</body>
+</html>
